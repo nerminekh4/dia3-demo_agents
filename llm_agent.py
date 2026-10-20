@@ -8,6 +8,7 @@ class ConversationAgent:
     def __init__(self):
         load_dotenv()
         self.groq_client = Groq(api_key=os.environ["GROQ_KEY"])
+        self.model = "qwen/qwen3.8-27b"
         self.conversation_history = [
                 {
                     "role": "system",
@@ -35,49 +36,27 @@ class ConversationAgent:
         )
 
 
-    def ask_llm(self, text_interaction):
+    @staticmethod
+    def build_user_content(text_interaction, image_urls):
+        if not image_urls:
+            return text_interaction
 
-        self.update_conversation_history(role="user", content=text_interaction)
+        content = [{"type": "text", "text": text_interaction}]
+        for image_url in image_urls:
+            content.append({"type": "image_url", "image_url": {"url": image_url}})
+        return content
+
+
+    def ask_llm(self, text_interaction, image_urls=None):
+
+        user_content = self.build_user_content(text_interaction, image_urls)
+        self.update_conversation_history(role="user", content=user_content)
 
         response = self.groq_client.chat.completions.create(
             messages=self.conversation_history,
-            model="openai/gpt-oss-120b",
-            include_reasoning=False,
+            model=self.model,
+            reasoning_format="hidden",
         ).choices[0].message.content
 
-
         self.update_conversation_history(role="assistant", content=response)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-if __name__ == "__main__":
-    question = input("Pose ta question :\n")
-    response = ask_llm(question)
-    print("\n")
-    print(response)
+        return response

@@ -1,6 +1,7 @@
 import streamlit as st
 from llm_agent import ConversationAgent
 from speech_to_text import SpeechToText
+from image_encoder import ImageEncoder
 
 
 class UserInterface:
@@ -25,10 +26,25 @@ class UserInterface:
 		return st.session_state.speech_to_text_object
 
 
+	@staticmethod
+	def show_message_content(content):
+		# Message texte simple
+		if isinstance(content, str):
+			st.markdown(content)
+			return
+
+		# Message avec image(s) : une liste de morceaux texte / image
+		for part in content:
+			if part["type"] == "text":
+				st.markdown(part["text"])
+			elif part["type"] == "image_url":
+				st.image(ImageEncoder.to_bytes(part["image_url"]["url"]), width=300)
+
+
 	def show_discussion_history(self):
 		for message in self.conversation_agent_object.get_conversation_history():
 			with st.chat_message(message["role"]):
-				st.markdown(message["content"])
+				self.show_message_content(message["content"])
 
 
 	def get_text_interaction(self, user_input):
@@ -41,18 +57,30 @@ class UserInterface:
 		return user_input.text
 
 
+	@staticmethod
+	def get_image_urls(user_input):
+		# On convertit les images jointes (3 maximum) en texte base64
+		return [ImageEncoder.to_data_url(image) for image in user_input.files[:3]]
+
+
 	def run(self):
 		user_input = st.chat_input(
 			"Que veux tu moussaillon ?",
-			accept_file=False,
-			accept_audio=True       # ← active le micro dans le champ de chat
+			accept_file="multiple",
+			file_type=["png", "jpg", "jpeg", "webp"],
+			accept_audio=True
 			)
 
 		if user_input:
 			text_interaction = self.get_text_interaction(user_input)
+			image_urls = self.get_image_urls(user_input)
+
+			# Image envoyée sans texte : on pose une question par défaut
+			if image_urls and not text_interaction:
+				text_interaction = "Que vois-tu sur cette image ?"
 
 			if text_interaction:
-				self.conversation_agent_object.ask_llm(text_interaction)
+				self.conversation_agent_object.ask_llm(text_interaction, image_urls)
 				self.show_discussion_history()
 
 
